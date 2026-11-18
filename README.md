@@ -24,7 +24,8 @@ Temporary add-ons are removed when Firefox closes; load it again next time.
 
 - `ext/`: the extension source (`background.js`, `reader.js`, icons).
 - `manifest.base.json`: shared manifest; `build.mjs` makes the Firefox and Chrome versions.
-- `dist/`: ready-to-load zips.
+- `dist/`: ready-to-load zips (made by `node build.mjs`; not stored in the repo).
+- `store/`: Firefox listing text and screenshots.
 - `test/`: automated tests (`python3 test/run_test.py`, needs Playwright + Chrome).
 
 ## Build
