@@ -1,0 +1,12 @@
+{
+  "name": "out-loud",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Out Loud – Private Read Aloud browser extension",
+  "license": "GPL-3.0-only",
+  "scripts": {
+    "build": "node build.mjs",
+    "lint": "npx web-ext lint --source-dir dist/firefox",
+    "test": "python3 test/run_test.py"
+  }
+}

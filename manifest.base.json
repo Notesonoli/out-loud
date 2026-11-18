@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Out Loud – Private Read Aloud",
+  "short_name": "Out Loud",
+  "version": "1.2.0",
+  "description": "Reads any web page or selection aloud and highlights each sentence. Uses your computer's own voices. Nothing you read leaves your computer.",
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
+  "action": {
+    "default_title": "Read aloud (Alt+Shift+R)",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+Shift+R" },
+      "description": "Read aloud / play-pause"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png",
+    "128": "icons/icon-128.png"
+  }
+}
