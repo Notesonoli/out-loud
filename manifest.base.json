@@ -2,9 +2,14 @@
   "manifest_version": 3,
   "name": "Out Loud – Private Read Aloud",
   "short_name": "Out Loud",
-  "version": "1.2.0",
-  "description": "Reads any web page or selection aloud and highlights each sentence. Uses your computer's own voices. Nothing you read leaves your computer.",
-  "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
+  "version": "2.0.0",
+  "description": "Reads web pages aloud and highlights each sentence, with natural voices made on your computer. What you read stays private.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus"
+  ],
   "action": {
     "default_title": "Read aloud (Alt+Shift+R)",
     "default_icon": {
@@ -15,7 +20,9 @@
   },
   "commands": {
     "_execute_action": {
-      "suggested_key": { "default": "Alt+Shift+R" },
+      "suggested_key": {
+        "default": "Alt+Shift+R"
+      },
       "description": "Read aloud / play-pause"
     }
   },
@@ -25,5 +32,12 @@
     "48": "icons/icon-48.png",
     "96": "icons/icon-96.png",
     "128": "icons/icon-128.png"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   }
 }

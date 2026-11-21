@@ -1,0 +1,21 @@
+Out Loud bundles these unmodified third-party files for its natural voices.
+
+vendor/kokoro.web.js
+  kokoro-js 1.2.1 (https://www.npmjs.com/package/kokoro-js), file dist/kokoro.web.js
+  Licence: Apache-2.0. Copyright Xenova / Hugging Face.
+  This single file is the library's own published browser build. It includes:
+    - @huggingface/transformers 3.8.1 (Apache-2.0)
+    - onnxruntime-web 1.22.0-dev.20250409-89f8206ba4 JavaScript (MIT, Microsoft)
+    - phonemizer 1.2.1 (Apache-2.0), which contains a WebAssembly build of
+      eSpeak NG (GPL-3.0-or-later)
+
+vendor/ort/ort-wasm-simd-threaded.jsep.mjs and .wasm
+  onnxruntime-web 1.22.0-dev.20250409-89f8206ba4 (https://www.npmjs.com/package/onnxruntime-web), files dist/ort-wasm-simd-threaded.jsep.*
+  Licence: MIT. Copyright (c) Microsoft Corporation.
+
+Voice model (downloaded once at first use, not bundled)
+  onnx-community/Kokoro-82M-v1.0-ONNX on Hugging Face, from hexgrad/Kokoro-82M.
+  Licence: Apache-2.0.
+
+Full licence texts: Apache-2.0 https://www.apache.org/licenses/LICENSE-2.0 ;
+MIT https://opensource.org/license/mit ; GPL-3.0 is in LICENSE.txt.

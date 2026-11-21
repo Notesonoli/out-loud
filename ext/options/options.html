@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Out Loud settings</title>
+<link rel="stylesheet" href="options.css">
+<main>
+  <header>
+    <img src="../icons/icon-48.png" alt="" width="40" height="40">
+    <div>
+      <h1>Out Loud</h1>
+      <p class="sub">Private read-aloud. The text you read never leaves your computer.</p>
+    </div>
+  </header>
+
+  <section class="card">
+    <h2>✨ Natural voices</h2>
+    <p>Pick a voice under <b>Natural voices</b> in the reader's voice menu. They sound far more human than
+      your computer's built-in voices, and they're generated <b>on your computer</b>, not in the cloud.</p>
+    <p class="muted">The first time, Out Loud downloads the voice model once (about 90 MB) from Hugging Face.
+      After that they work offline.</p>
+  </section>
+
+  <section class="card" id="pro">
+    <h2>Out Loud Pro <span class="badge" id="badge" hidden>Unlocked</span></h2>
+    <div id="free">
+      <p>Without Pro you get <b id="perday">40</b> natural-voice sentences a day for free
+        (<b id="left">40</b> left today). Your computer's own voices are always free and unlimited.</p>
+      <p>Pro unlocks natural voices with no daily limit, for a one-time <b>$5</b>. No account, no subscription.</p>
+      <p><a class="buy" id="buy" target="_blank" rel="noopener">Buy Out Loud Pro ($5)</a></p>
+      <form id="form">
+        <label for="key">Already bought it? Paste your licence key from the Gumroad receipt:</label>
+        <div class="row">
+          <input id="key" autocomplete="off" spellcheck="false" placeholder="XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" required>
+          <button type="submit" id="activate">Unlock</button>
+        </div>
+      </form>
+    </div>
+    <div id="active" hidden>
+      <p>Natural voices have no daily limit. Thank you for supporting Out Loud!</p>
+      <p class="muted">Licence key: <code id="shown"></code> · <button class="link" id="remove" type="button">Remove from this browser</button></p>
+    </div>
+    <p id="msg" role="status"></p>
+  </section>
+
+  <p class="muted small">Checking a licence key sends only the key to Gumroad, once, and again every two weeks.
+    Nothing about the pages you read is ever sent.</p>
+</main>
+<script type="module" src="options.js"></script>
+</html>

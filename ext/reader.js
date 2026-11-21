@@ -1,7 +1,8 @@
 // Out Loud: the reader. Runs in the page only after you ask it to.
 // Finds the article (or your selection), splits it into sentences, reads them
-// with your computer's own voices and highlights each sentence as it's read.
-// Nothing leaves your computer.
+// with your computer's own voices (or the natural voices, generated on your
+// computer by the extension) and highlights each sentence as it's read.
+// The text you read never leaves your computer.
 
 (() => {
   if (window.__outloudLoaded) return;
@@ -14,6 +15,14 @@
   const SKIP = "script,style,noscript,template,svg,math,textarea,input,select,button,nav,aside,footer,form,[aria-hidden='true'],[role='navigation'],[role='complementary'],[role='banner'],[hidden],.outloud-host";
   const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
   const MAX_CHUNK = 260; // long sentences are split so voices don't cut out
+
+  // Natural voices: generated on this computer by the extension's own engine.
+  const NATURAL = [
+    ["af_heart", "Heart", "US"], ["af_bella", "Bella", "US"], ["af_nicole", "Nicole", "US"],
+    ["am_michael", "Michael", "US"], ["am_fenrir", "Fenrir", "US"], ["am_puck", "Puck", "US"],
+    ["bf_emma", "Emma", "UK"], ["bm_george", "George", "UK"], ["bm_fable", "Fable", "UK"],
+  ];
+  const isNatural = (name) => name.startsWith("kokoro:");
 
   const state = {
     segments: [], // what's playing now: the article, or a selection outside it
@@ -30,6 +39,11 @@
     spokeAt: 0,
     lastSelText: "",
     ui: null,
+    port: null, // connection to the natural voice engine
+    nextId: 0,
+    speakingId: 0,
+    notice: "", // one-line message shown in the player
+    noticeAction: null,
   };
 
   // ---------- settings ----------
@@ -301,9 +315,11 @@
     const token = ++state.token;
     synth.cancel();
     const seg = state.segments[state.index];
-    if (!seg) { finished(); return; }
+    if (!seg) { stopNatural(); finished(); return; }
     highlight(seg);
     updateUI();
+    if (isNatural(state.voiceName)) { speakNatural(seg); return; }
+    stopNatural();
     const u = new SpeechSynthesisUtterance(seg.text);
     const v = pickVoice();
     if (v) { u.voice = v; u.lang = v.lang; }
@@ -334,7 +350,7 @@
   function startWatchdog() {
     clearInterval(watchdog);
     watchdog = setInterval(() => {
-      if (!state.playing || !state.spokeAt) return;
+      if (!state.playing || !state.spokeAt || isNatural(state.voiceName)) return;
       if (synth.speaking || synth.pending) return;
       if (Date.now() - state.spokeAt < 1500) return;
       state.spokeAt = 0;
@@ -357,6 +373,94 @@
     stopWatchdog();
     state.token++;
     synth.cancel();
+    stopNatural();
+    updateUI();
+  }
+
+  // ---------- natural voices ----------
+
+  async function connectEngine() {
+    if (state.port) return state.port;
+    // Chrome/Edge need the engine page started first; Firefox already has it.
+    try { await api.runtime.sendMessage({ type: "outloud:engine" }); } catch { /* Firefox: no-op */ }
+    const port = api.runtime.connect({ name: "outloud-tts" });
+    state.port = port;
+    port.onMessage.addListener(onEngineMessage);
+    port.onDisconnect.addListener(() => {
+      if (state.port !== port) return;
+      clearInterval(state.pinger);
+      state.port = null;
+      // The engine page was closed (browser idle): pick up again on the same sentence.
+      if (state.playing && isNatural(state.voiceName) && state.speakingId) speakCurrent();
+    });
+    clearInterval(state.pinger);
+    // Firefox puts an idle background page to sleep after 30 s; this keeps it awake while reading.
+    state.pinger = setInterval(() => { try { port.postMessage({ type: "ping" }); } catch { /* gone */ } }, 10000);
+    return port;
+  }
+
+  async function speakNatural(seg) {
+    const id = ++state.nextId;
+    state.speakingId = id;
+    const voice = state.voiceName.slice("kokoro:".length);
+    const ahead = state.segments.slice(state.index + 1, state.index + 3).map((x) => x.text);
+    let port;
+    try { port = await connectEngine(); } catch (err) { naturalFailed(String(err?.message ?? err)); return; }
+    if (state.speakingId !== id) return;
+    port.postMessage({ type: "speak", id, text: seg.text, voice, rate: state.rate, ahead });
+  }
+
+  function stopNatural() {
+    if (!state.speakingId) return;
+    state.speakingId = 0;
+    try { state.port?.postMessage({ type: "stop" }); } catch { /* gone */ }
+  }
+
+  function onEngineMessage(msg) {
+    if (!msg) return;
+    if (msg.type === "loading") {
+      setNotice(msg.pct >= 100 ? "Getting the natural voice ready…" : `Getting the natural voice ready (one-time download)… ${msg.pct}%`);
+      return;
+    }
+    if (msg.type === "ready") { if (state.notice.startsWith("Getting")) setNotice(""); return; }
+    if (msg.id !== state.speakingId) return; // about a sentence we've moved on from
+    if (msg.type === "started") {
+      if (state.notice.startsWith("Getting")) setNotice("");
+      if (msg.left !== null && msg.left !== undefined && msg.left <= 5) {
+        setNotice(msg.left ? `${msg.left} free natural sentences left today.` : "That was the last free natural sentence today.", "Get Pro");
+      } else if (msg.slow && !state.notice) {
+        setNotice("Your computer is a little slow for natural voices, so there may be short pauses.");
+      }
+    } else if (msg.type === "ended") {
+      state.speakingId = 0;
+      if (!state.playing) return;
+      state.index++;
+      speakCurrent();
+    } else if (msg.type === "limit") {
+      state.speakingId = 0;
+      useSystemVoice("You've used today's free natural-voice sentences, so I've switched to your computer's voice.", "Get Pro");
+    } else if (msg.type === "error") {
+      state.speakingId = 0;
+      naturalFailed(msg.message);
+    }
+  }
+
+  function naturalFailed(message) {
+    console.warn("Out Loud natural voice:", message);
+    useSystemVoice("The natural voice couldn't start (are you offline?), so I've switched to your computer's voice.");
+  }
+
+  // Carry on reading with the computer's own voice, without saving that choice.
+  function useSystemVoice(notice, action) {
+    state.voiceName = state.systemVoiceName || "";
+    fillVoices();
+    setNotice(notice, action);
+    if (state.playing) speakCurrent();
+  }
+
+  function setNotice(text, action) {
+    state.notice = text;
+    state.noticeAction = action || null;
     updateUI();
   }
 
@@ -484,6 +588,15 @@
       padding: 5px 6px; font: inherit; max-width: 170px; }
     .count { min-width: 64px; text-align: center; opacity: .8; font-variant-numeric: tabular-nums; }
     .sep { width: 1px; height: 24px; background: #444c56; margin: 0 2px; }
+    [hidden] { display: none !important; }
+    .notice { position: fixed; right: 16px; bottom: 74px; z-index: 2147483647; max-width: 420px;
+      display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px;
+      background: #2d333b; color: #f5f5f5; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.35);
+      font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .notice-text { flex: 1; }
+    .notice button { width: auto; height: auto; padding: 4px 8px; }
+    .notice-action { background: #ffd54f; color: #1f2328; font-weight: 600; }
+    .notice-action:hover { background: #ffe082; }
   `;
 
   function buildUI() {
@@ -506,12 +619,21 @@
         button("select", "Read text when I select it", "select"),
         button("close", "Close reader", "close"),
       ]),
+      el("div", { class: "notice", hidden: "", role: "status" }, [
+        el("span", { class: "notice-text" }),
+        el("button", { class: "notice-action", hidden: "" }),
+        el("button", { class: "notice-close", title: "Dismiss", "aria-label": "Dismiss" }, ["×"]),
+      ]),
     );
     const $ = (s) => root.querySelector(s);
     $(".prev").addEventListener("click", () => jump(-1));
     $(".next").addEventListener("click", () => jump(1));
     $(".play").addEventListener("click", () => (state.playing ? pause() : play()));
     $(".close").addEventListener("click", closeReader);
+    $(".notice-close").addEventListener("click", () => setNotice(""));
+    $(".notice-action").addEventListener("click", () => {
+      try { api.runtime.sendMessage({ type: "outloud:options" }); } catch { /* ignore */ }
+    });
     const speed = $(".speed");
     speed.value = String(state.rate);
     speed.addEventListener("change", () => {
@@ -522,6 +644,8 @@
     const voiceSel = $(".voice");
     voiceSel.addEventListener("change", () => {
       state.voiceName = voiceSel.value;
+      if (!isNatural(state.voiceName)) state.systemVoiceName = state.voiceName;
+      if (state.notice) setNotice("");
       saveSettings();
       if (state.playing) speakCurrent();
     });
@@ -559,17 +683,22 @@
   function fillVoices() {
     if (!state.ui) return;
     const sel = state.ui.$(".voice");
-    const current = pickVoice();
+    const natural = isNatural(state.voiceName);
+    const current = natural ? null : pickVoice();
     const all = voices().slice().sort((a, b) => a.lang.localeCompare(b.lang) || a.name.localeCompare(b.name));
     sel.textContent = "";
+    const nat = el("optgroup", { label: "✨ Natural voices" },
+      NATURAL.map(([id, name, accent]) => el("option", { value: `kokoro:${id}` }, [`${name} (${accent})`])));
+    const sys = el("optgroup", { label: "Your computer's voices" });
     for (const v of all) {
       const o = document.createElement("option");
       o.value = v.name;
       o.textContent = `${v.name.replace(/^Microsoft |^Google /, "")} (${v.lang})`;
-      if (current && v.name === current.name) o.selected = true;
-      sel.appendChild(o);
+      sys.appendChild(o);
     }
-    sel.disabled = all.length === 0;
+    sel.append(nat, sys);
+    sel.value = natural ? state.voiceName : current ? current.name : "";
+    if (!natural && current) state.systemVoiceName = current.name;
   }
 
   function updateUI() {
@@ -584,10 +713,20 @@
     selBtn.title = state.readOnSelect ? "Reading text when you select it (click to turn off)" : "Read text when I select it";
     const total = state.segments.length;
     $(".count").textContent = total ? `${Math.min(state.index + 1, total)} / ${total}` : "Nothing to read";
+    const notice = $(".notice");
+    notice.hidden = !state.notice;
+    $(".notice-text").textContent = state.notice;
+    const action = $(".notice-action");
+    action.hidden = !state.noticeAction;
+    action.textContent = state.noticeAction || "";
   }
 
   function closeReader() {
     pause();
+    clearInterval(state.pinger);
+    try { state.port?.disconnect(); } catch { /* gone */ }
+    state.port = null;
+    state.notice = "";
     clearHighlight();
     document.removeEventListener("click", onPageClick, true);
     document.removeEventListener("mouseup", onSelectEnd, true);

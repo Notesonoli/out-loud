@@ -1,9 +1,12 @@
 // Out Loud: background script.
 // Injects the reader into the current tab only when the user asks (toolbar
-// button, keyboard shortcut or right-click menu). No host permissions, no
-// network requests, nothing stored about the pages you read.
+// button, keyboard shortcut or right-click menu). No host permissions and
+// nothing stored about the pages you read. Natural voices run in engine/.
 
-const api = globalThis.browser ?? globalThis.chrome;
+// Chrome/Edge run this as a service worker and use chrome.*: newer Chrome also
+// has a browser.* namespace, but its listeners don't get the offscreen page's
+// messages. Firefox runs it in a background page and uses browser.*.
+const api = typeof ServiceWorkerGlobalScope !== "undefined" ? globalThis.chrome : (globalThis.browser ?? globalThis.chrome);
 
 async function start(tab, mode) {
   if (!tab || tab.id === undefined) return;
@@ -39,4 +42,40 @@ api.runtime.onInstalled.addListener(() => {
 api.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "outloud-selection") start(tab, "selection");
   if (info.menuItemId === "outloud-page") start(tab, "page");
+});
+
+// Chrome/Edge run the natural voice engine in an offscreen page, created when a
+// tab first asks for it. Firefox runs it in the background page itself.
+let creating = null;
+async function ensureEngine() {
+  if (!api.offscreen) return;
+  if (await api.offscreen.hasDocument?.()) return;
+  creating ??= api.offscreen.createDocument({
+    url: "engine/offscreen.html",
+    reasons: ["AUDIO_PLAYBACK"],
+    justification: "Plays the natural voice that reads the page aloud, generated on this computer.",
+  }).finally(() => { creating = null; });
+  await creating;
+}
+
+// Replies work both ways: browsers that expect a returned promise use it, and
+// older Chrome uses sendResponse.
+function reply(promise, sendResponse) {
+  return promise.then((value) => { try { sendResponse(value); } catch { /* already answered */ } return value; });
+}
+
+api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === "outloud:engine") {
+    return reply(ensureEngine().then(() => ({ ok: true }), (e) => ({ ok: false, message: String(e?.message ?? e) })), sendResponse);
+  }
+  if (msg?.type === "outloud:options") api.runtime.openOptionsPage();
+  // Storage for the offscreen engine page, which can't reach it itself. Only
+  // accepted from the extension's own pages, never from web pages.
+  if (!sender.tab && sender.id === api.runtime.id) {
+    const keys = ["licenseKey", "proActive", "proCheckedAt", "freeDay", "freeUsed"];
+    const only = (o) => Object.fromEntries(Object.entries(o || {}).filter(([k]) => keys.includes(k)));
+    if (msg?.type === "outloud:storage-get") return reply(api.storage.local.get(only(msg.defaults)), sendResponse);
+    if (msg?.type === "outloud:storage-set") return reply(api.storage.local.set(only(msg.values)).then(() => true), sendResponse);
+  }
+  return false;
 });
